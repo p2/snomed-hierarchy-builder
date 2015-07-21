@@ -3,8 +3,8 @@
 
 import requests
 
-_prefix = '	'
-_format = '{}({}, "{}"),'		# 3 placeholders: _prefix, snomed, label
+_prefix = '-'
+_format = '{}>  {}: {}'		# 3 placeholders: _prefix, snomed, label
 
 _url = "http://schemes.caregraf.info/snomed/sparql"
 _query = """
@@ -28,6 +28,21 @@ ORDER BY ?skos_prefLabel
 LIMIT 100
 """
 
+class Concept(object):
+	def __init__(self, sct, label):
+		self.snomed = sct
+		self.label = label
+		self.children = []
+	
+	def render(self, level=0):
+		prefix = ''.join([_prefix for r in range(0, level)])
+		
+		line = _format.format(prefix, self.snomed, self.label)
+		print(line)
+		for child in self.children:
+			child.render(level+1)
+
+
 def load_tree(base_sct):
 	qry = _query.format(base_sct, base_sct, base_sct)
 	
@@ -46,27 +61,29 @@ def handle_result(result):
 	has_more = int(result.get('cgkos_numberSubordinates', {}).get('value', 0)) > 0
 	return snomed, uri, lbl, has_more
 
-def build_tree(base_sct, indent=0):
-	lines = []
-	tree = load_tree(base_sct)
-	results = find_results(tree)
+def build_tree(base_sct):
+	tree = None
+	root = load_tree(base_sct)
+	results = find_results(root)
 	if results is not None:
-		prefix = ''.join([_prefix for r in range(0, indent)])
+		leaves = []
 		for result in results:
 			snomed, uri, lbl, has_more = handle_result(result)
 			
 			# has child nodes, recurse
 			if has_more and snomed is not None:
-				lines.extend(build_tree(snomed, indent+1))
+				leaves.append(build_tree(snomed))
 			
-			# format and instert the line
+			# no children, is either final leave or the root concept
 			else:
-				line = _format.format(prefix, snomed or base_sct, lbl)
+				cpt = Concept(snomed or base_sct, lbl)
 				if snomed is not None:
-					lines.append(_prefix+line)
+					leaves.append(cpt)
 				else:
-					lines.insert(0, line)
-	return lines
+					assert tree is None
+					tree = cpt
+		tree.children = leaves
+	return tree
 
 
 if '__main__' == __name__:
@@ -75,6 +92,5 @@ if '__main__' == __name__:
 		start_sct = '254837009'
 	
 	print("Fetching SNOMED hierarchy for {}...".format(start_sct))
-	lines = build_tree(start_sct, indent=2)
-	print("\n".join(lines))
-
+	tree = build_tree(start_sct)
+	tree.render(level=2)
