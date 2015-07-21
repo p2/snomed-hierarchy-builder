@@ -3,8 +3,8 @@
 
 import requests
 
-_prefix = '-'
-_format = '{}>  {}: {}'		# 3 placeholders: _prefix, snomed, label
+_prefix = '	'
+_format = '{}({}, "{}"),'		# 3 placeholders: _prefix, snomed, label
 
 _url = "http://schemes.caregraf.info/snomed/sparql"
 _query = """
@@ -54,15 +54,18 @@ def build_tree(base_sct, indent=0):
 		prefix = ''.join([_prefix for r in range(0, indent)])
 		for result in results:
 			snomed, uri, lbl, has_more = handle_result(result)
+			
+			# has child nodes, recurse
 			if has_more and snomed is not None:
 				lines.extend(build_tree(snomed, indent+1))
 			
 			# format and instert the line
-			line = _format.format(prefix, snomed or base_sct, lbl)
-			if snomed is not None:
-				lines.append(_prefix+line)
 			else:
-				lines.insert(0, line)
+				line = _format.format(prefix, snomed or base_sct, lbl)
+				if snomed is not None:
+					lines.append(_prefix+line)
+				else:
+					lines.insert(0, line)
 	return lines
 
 
